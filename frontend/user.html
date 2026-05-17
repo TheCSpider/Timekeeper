@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Timekeeper</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<header>
+  <h1>⏱ Timekeeper</h1>
+  <div class="header-right">
+    <span class="header-username" id="header-username"></span>
+    <button class="btn btn-light btn-sm" onclick="logout()">Sign Out</button>
+  </div>
+</header>
+
+<!-- Spending blocked banner -->
+<div id="blocked-banner" class="alert alert-danger hidden" style="border-radius:0;border-left:none;border-right:none;">
+  <span>🔒 Spending blocked — mandatory chores were not completed last week.</span>
+  <span class="spacer"></span>
+  <span class="text-sm">Ask an admin to override.</span>
+</div>
+
+<main class="container">
+
+  <!-- Row 1: Balance + Session -->
+  <div class="grid-2">
+
+    <!-- Balance card -->
+    <div class="card">
+      <div class="card-label">Available Time</div>
+      <div class="balance-display" id="balance-display">—</div>
+      <div class="balance-sub" id="balance-sub">minutes remaining</div>
+    </div>
+
+    <!-- Session card -->
+    <div class="card">
+      <div class="card-label">Screen Time Session</div>
+
+      <!-- Idle state -->
+      <div id="session-idle">
+        <p class="text-muted mb-2">No active session.</p>
+        <div class="session-controls">
+          <button id="start-now-btn" class="btn btn-success w-full">▶ Start Now</button>
+          <p class="time-or">— or set a specific start time —</p>
+          <div class="manual-row">
+            <input type="datetime-local" id="manual-start" class="input">
+            <button id="start-manual-btn" class="btn btn-outline">Start</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Active state -->
+      <div id="session-active" class="hidden">
+        <div class="session-timer" id="session-timer">00:00</div>
+        <div class="session-info" id="session-info">Started at —</div>
+        <div id="balance-live" class="text-sm text-warning mb-2"></div>
+        <div class="session-controls">
+          <button id="stop-now-btn" class="btn btn-danger w-full">■ Stop Now</button>
+          <p class="time-or">— or set a specific stop time —</p>
+          <div class="manual-row">
+            <input type="datetime-local" id="manual-stop" class="input">
+            <button id="stop-manual-btn" class="btn btn-outline">Stop</button>
+          </div>
+          <div style="text-align:center;">
+            <button class="btn btn-ghost btn-sm" onclick="cancelSession()" style="color:var(--text-3);font-size:.75rem;">✕ Cancel Session (no deduction)</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Row 2: Countdown Timer -->
+  <div class="card timer-card" id="countdown-card">
+    <div class="card-header">
+      <h2>⏳ Countdown Timer</h2>
+      <span class="text-xs text-muted" id="timer-status-text"></span>
+    </div>
+    <div class="countdown-body">
+      <div class="countdown-display" id="countdown-display">00:00</div>
+      <div class="countdown-quick">
+        <button class="btn btn-sm btn-outline" onclick="setQuickTimer(5)">5m</button>
+        <button class="btn btn-sm btn-outline" onclick="setQuickTimer(10)">10m</button>
+        <button class="btn btn-sm btn-outline" onclick="setQuickTimer(15)">15m</button>
+        <button class="btn btn-sm btn-outline" onclick="setQuickTimer(20)">20m</button>
+        <button class="btn btn-sm btn-outline" onclick="setQuickTimer(30)">30m</button>
+      </div>
+      <div class="countdown-custom">
+        <input type="number" id="countdown-input" class="input" min="1" step="1" placeholder="Custom minutes…">
+        <button class="btn btn-outline" onclick="setCustomTimer()">Set</button>
+      </div>
+      <div class="countdown-controls">
+        <button class="btn btn-success" id="timer-start-btn" onclick="timerStartPause()" disabled>▶ Start</button>
+        <button class="btn btn-ghost" id="timer-reset-btn" onclick="timerReset()" disabled>↺ Reset</button>
+      </div>
+    </div>
+    <div id="alarm-overlay" class="alarm-overlay hidden">
+      <div class="alarm-icon">⏰</div>
+      <div class="alarm-msg">Time's up!</div>
+      <button class="btn btn-danger" onclick="dismissAlarm()">Dismiss</button>
+    </div>
+  </div>
+
+  <!-- Row 3: Mandatory chores progress -->
+  <div class="card" id="mandatory-card">
+    <div class="card-header">
+      <h2>This Week's Mandatory Chores</h2>
+      <span class="badge" id="mandatory-badge">Loading…</span>
+    </div>
+    <div class="progress-wrap">
+      <div class="progress-bar" id="mandatory-bar" style="width:0%"></div>
+    </div>
+    <p class="progress-text" id="mandatory-text"></p>
+    <div class="chore-check-list" id="mandatory-chore-list"></div>
+  </div>
+
+  <!-- Row 4: Available chores -->
+  <div class="card">
+    <div class="card-header">
+      <h2>Available Chores</h2>
+      <button class="btn btn-ghost btn-sm" onclick="loadChores()">↻ Refresh</button>
+    </div>
+    <div id="chores-list" class="chore-list">
+      <div class="empty-state"><div class="empty-icon">⏳</div>Loading chores…</div>
+    </div>
+  </div>
+
+  <!-- Row 5: Recent activity -->
+  <div class="card">
+    <div class="card-header">
+      <h2>Recent Activity</h2>
+      <button class="btn btn-ghost btn-sm" onclick="loadCompletions()">↻ Refresh</button>
+    </div>
+    <div id="completions-list">
+      <div class="empty-state"><div class="empty-icon">⏳</div>Loading…</div>
+    </div>
+  </div>
+
+</main>
+
+<!-- Chore submission modal -->
+<div class="modal-overlay hidden" id="chore-modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 id="modal-chore-name">Submit Chore</h3>
+      <button class="modal-close" onclick="closeModal('chore-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <p id="modal-chore-desc" class="text-muted text-sm"></p>
+      <p id="modal-chore-earn" class="text-sm text-success font-bold"></p>
+      <div class="hidden" id="modal-duration-group">
+        <!-- Mode selector -->
+        <div class="dur-mode-tabs">
+          <button class="dur-mode-tab active" id="dur-mode-direct" onclick="setDurationMode('direct')">⏱ Duration</button>
+          <button class="dur-mode-tab" id="dur-mode-times" onclick="setDurationMode('times')">🕐 Start & End Time</button>
+        </div>
+        <!-- Direct duration panel -->
+        <div class="form-group" id="dur-direct-panel">
+          <label for="modal-duration">Duration (minutes) <span class="text-danger">*</span></label>
+          <input type="number" id="modal-duration" class="input" min="1" step="1" placeholder="How many minutes?">
+        </div>
+        <!-- Times panel -->
+        <div class="hidden" id="dur-times-panel">
+          <div class="dur-times-grid">
+            <div class="form-group">
+              <label for="modal-start-time">Start Time <span class="text-danger">*</span></label>
+              <input type="datetime-local" id="modal-start-time" class="input" oninput="calcModalDuration()">
+            </div>
+            <div class="form-group">
+              <label for="modal-end-time">End Time <span class="text-danger">*</span></label>
+              <input type="datetime-local" id="modal-end-time" class="input" oninput="calcModalDuration()">
+            </div>
+          </div>
+          <div id="modal-duration-calc" class="text-sm text-muted mt-1">Calculated duration: —</div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="modal-notes">Notes (optional)</label>
+        <textarea id="modal-notes" class="input" rows="2" placeholder="Anything to add…"></textarea>
+      </div>
+      <p id="modal-error" class="text-danger text-sm"></p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('chore-modal')">Cancel</button>
+      <button class="btn btn-primary" id="modal-submit-btn" onclick="submitChore()">Submit</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script src="/js/api.js"></script>
+<script src="/js/user.js"></script>
+</body>
+</html>

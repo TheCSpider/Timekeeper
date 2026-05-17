@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: timekeeper
+      POSTGRES_USER: timekeeper
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-timekeeper_pass}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U timekeeper"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    # Local dev / Portainer Repository deployment: build from source
+    build: .
+    # Registry deployment: comment out 'build' above and set IMAGE in .env
+    # image: ${IMAGE:-ghcr.io/your-username/timekeeper:latest}
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      DATABASE_URL: postgresql://timekeeper:${POSTGRES_PASSWORD:-timekeeper_pass}@db:5432/timekeeper
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET env var is required}
+      PORT: 3000
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

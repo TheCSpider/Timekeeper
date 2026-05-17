@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Timekeeper — Admin</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<header>
+  <h1>⏱ Timekeeper <span style="font-size:.75rem;opacity:.7;font-weight:400;">Admin</span></h1>
+  <div class="header-right">
+    <span class="header-username" id="header-username"></span>
+    <button class="btn btn-light btn-sm" onclick="logout()">Sign Out</button>
+  </div>
+</header>
+
+<main class="container">
+
+  <!-- Tab navigation -->
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('dashboard')">Dashboard</button>
+    <button class="tab-btn" onclick="switchTab('chores')">Chores</button>
+    <button class="tab-btn" onclick="switchTab('settings')">Settings</button>
+  </div>
+
+  <!-- ── Dashboard tab ── -->
+  <div class="tab-pane active" id="tab-dashboard">
+
+    <!-- User overview -->
+    <div class="card">
+      <div class="card-header">
+        <h2>This Week — User Overview</h2>
+        <button class="btn btn-ghost btn-sm" onclick="loadDashboard()">↻ Refresh</button>
+      </div>
+      <div id="dashboard-table">
+        <div class="empty-state"><div class="empty-icon">⏳</div>Loading…</div>
+      </div>
+    </div>
+
+    <!-- Pending validations (merged from former Pending tab) -->
+    <div class="card">
+      <div class="card-header">
+        <h2>Pending Chore Validations <span id="pending-count" class="badge badge-warning" style="display:none;margin-left:.375rem;"></span></h2>
+        <button class="btn btn-ghost btn-sm" onclick="loadPending()">↻ Refresh</button>
+      </div>
+      <div id="pending-table">
+        <div class="empty-state"><div class="empty-icon">⏳</div>Loading…</div>
+      </div>
+    </div>
+
+    <!-- Adjust time balance — compact horizontal layout -->
+    <div class="card">
+      <div class="card-header"><h2>Adjust Time Balance</h2></div>
+      <div class="adjust-row">
+        <div class="form-group" style="flex:1.75;min-width:130px;">
+          <label>User</label>
+          <select id="award-user-id" class="input"></select>
+        </div>
+        <div class="form-group" style="flex:0;min-width:172px;">
+          <label>Action</label>
+          <div style="display:flex;gap:.375rem;">
+            <label style="flex:1;display:flex;align-items:center;gap:.375rem;padding:.45rem .625rem;border:1.5px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;font-size:.8125rem;" id="award-opt">
+              <input type="radio" name="adjust-action" value="award" checked onchange="updateAdjustUI()"> Award
+            </label>
+            <label style="flex:1;display:flex;align-items:center;gap:.375rem;padding:.45rem .625rem;border:1.5px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;font-size:.8125rem;" id="deduct-opt">
+              <input type="radio" name="adjust-action" value="deduct" onchange="updateAdjustUI()"> Deduct
+            </label>
+          </div>
+        </div>
+        <div class="form-group" style="flex:0.8;min-width:90px;">
+          <label id="adjust-minutes-label">Minutes</label>
+          <input type="number" id="award-minutes" class="input" min="1" placeholder="e.g. 30">
+        </div>
+        <div class="form-group" style="flex:2;min-width:150px;">
+          <label>Reason (optional)</label>
+          <input type="text" id="award-reason" class="input" placeholder="e.g. Good behavior">
+        </div>
+        <div style="align-self:flex-end;flex-shrink:0;">
+          <button class="btn btn-success" id="adjust-submit-btn" onclick="adjustTime()">Award Time</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent activity -->
+    <div class="card">
+      <div class="card-header">
+        <h2>Recent Activity</h2>
+        <button class="btn btn-ghost btn-sm" onclick="loadActivity()">↻ Refresh</button>
+      </div>
+      <!-- Filters -->
+      <div class="activity-filters">
+        <div class="form-group" style="flex:1.5;min-width:130px;">
+          <label class="text-xs">Chore</label>
+          <select id="filter-chore" class="input input-sm" onchange="filterActivity()">
+            <option value="">All chores</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:1.25;min-width:110px;">
+          <label class="text-xs">User</label>
+          <select id="filter-user" class="input input-sm" onchange="filterActivity()">
+            <option value="">All users</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:1;min-width:110px;">
+          <label class="text-xs">Status</label>
+          <select id="filter-status" class="input input-sm" onchange="filterActivity()">
+            <option value="">All statuses</option>
+            <option value="approved">Approved</option>
+            <option value="auto_approved">Auto-approved</option>
+            <option value="pending">Pending</option>
+            <option value="rejected">Rejected</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:1;min-width:120px;">
+          <label class="text-xs">From</label>
+          <input type="date" id="filter-date-from" class="input input-sm" oninput="filterActivity()">
+        </div>
+        <div class="form-group" style="flex:1;min-width:120px;">
+          <label class="text-xs">To</label>
+          <input type="date" id="filter-date-to" class="input input-sm" oninput="filterActivity()">
+        </div>
+        <div style="align-self:flex-end;flex-shrink:0;">
+          <button class="btn btn-ghost btn-sm" onclick="resetActivityFilters()">✕ Reset</button>
+        </div>
+      </div>
+      <div id="activity-table">
+        <div class="empty-state"><div class="empty-icon">⏳</div>Loading…</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Chores tab ── -->
+  <div class="tab-pane" id="tab-chores">
+    <div class="card">
+      <div class="card-header">
+        <h2>Chore List</h2>
+        <div style="display:flex;gap:.5rem;">
+          <button class="btn btn-ghost btn-sm" onclick="loadChores()">↻ Refresh</button>
+          <button class="btn btn-primary btn-sm" onclick="openChoreForm(null)">+ Add Chore</button>
+        </div>
+      </div>
+      <div id="chores-table">
+        <div class="empty-state"><div class="empty-icon">⏳</div>Loading…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Settings tab ── -->
+  <div class="tab-pane" id="tab-settings">
+
+    <div class="grid-2">
+      <!-- Create User -->
+      <div class="card">
+        <div class="card-header"><h2>Create User</h2></div>
+        <div style="display:flex;flex-direction:column;gap:.75rem;">
+          <div class="form-group">
+            <label>Username</label>
+            <input type="text" id="new-username" class="input" placeholder="username">
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <input type="password" id="new-password" class="input" placeholder="password">
+          </div>
+          <div class="form-group">
+            <label>Role</label>
+            <select id="new-role" class="input">
+              <option value="user">User</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" onclick="createUser()">Create User</button>
+          <p id="create-user-error" class="text-danger text-sm"></p>
+        </div>
+      </div>
+
+      <!-- Weekly Settings -->
+      <div class="card">
+        <div class="card-header"><h2>Weekly Settings</h2></div>
+        <div style="display:flex;flex-direction:column;gap:.75rem;">
+          <div class="form-group">
+            <label>Sunday Allowance (minutes)</label>
+            <input type="number" id="setting-allowance" class="input" min="0" placeholder="e.g. 60">
+            <p class="text-xs text-muted mt-1">Amount awarded automatically every Sunday.</p>
+          </div>
+          <div class="form-group">
+            <label>Required Mandatory Chores</label>
+            <input type="number" id="setting-required" class="input" min="0" placeholder="0 = all mandatory chores">
+            <p class="text-xs text-muted mt-1">0 means all mandatory chores must be completed.</p>
+          </div>
+          <div class="form-group">
+            <label>Effective from (Sunday)</label>
+            <input type="date" id="setting-date" class="input">
+            <p class="text-xs text-muted mt-1">Leave blank to apply from next Sunday.</p>
+          </div>
+          <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
+          <p id="settings-msg" class="text-sm"></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings History (full width) -->
+    <div class="card">
+      <div class="card-header"><h2>Settings History</h2></div>
+      <div id="settings-history">
+        <div class="empty-state"><div class="empty-icon">⏳</div>Loading…</div>
+      </div>
+    </div>
+
+  </div>
+
+</main>
+
+<!-- Chore add/edit modal -->
+<div class="modal-overlay hidden" id="chore-modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 id="chore-modal-title">Add Chore</h3>
+      <button class="modal-close" onclick="closeModal('chore-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="chore-edit-id">
+      <div class="form-group">
+        <label>Name <span class="text-danger">*</span></label>
+        <input type="text" id="chore-name" class="input" placeholder="Chore name">
+      </div>
+      <div class="form-group">
+        <label>Description</label>
+        <textarea id="chore-desc" class="input" rows="2" placeholder="Optional description"></textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Type <span class="text-danger">*</span></label>
+          <select id="chore-type" class="input" onchange="onChoreTypeChange()">
+            <option value="doing">Doing (fixed reward)</option>
+            <option value="time_based">Time-based (ratio reward)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Requires Validation?</label>
+          <select id="chore-validation" class="input">
+            <option value="false">No (auto-approved)</option>
+            <option value="true">Yes (admin reviews)</option>
+          </select>
+        </div>
+      </div>
+      <div id="doing-fields">
+        <div class="form-group">
+          <label>Time Earned (minutes)</label>
+          <input type="number" id="chore-earned" class="input" min="0" placeholder="e.g. 30 — use 0 for mandatory-only">
+        </div>
+      </div>
+      <div id="time-fields" class="hidden">
+        <div class="form-group">
+          <label>Earn Ratio</label>
+          <input type="number" id="chore-ratio" class="input" min="0" step="0.1" placeholder="e.g. 0.5 = earn half the logged time">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Repeatable</label>
+          <select id="chore-repeat" class="input">
+            <option value="once">Once per week</option>
+            <option value="daily">Once per day</option>
+            <option value="weekdays">Once per weekday (Mon–Fri)</option>
+            <option value="unlimited">Unlimited times</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Active?</label>
+          <select id="chore-active" class="input">
+            <option value="true">Yes</option>
+            <option value="false">No (hidden from users)</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Max Earning Cap (minutes) <span class="text-muted text-xs">optional</span></label>
+          <input type="number" id="chore-max-earned" class="input" min="0" placeholder="Leave blank for no cap">
+        </div>
+        <div class="form-group">
+          <label>Cap Period</label>
+          <select id="chore-max-period" class="input">
+            <option value="day">Per day</option>
+            <option value="week">Per week</option>
+          </select>
+        </div>
+      </div>
+      <p class="text-xs text-muted">Cap limits the total time earned from this chore in the period, across all submissions of the same chore.</p>
+      <p id="chore-modal-error" class="text-danger text-sm"></p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('chore-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveChore()">Save Chore</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script src="/js/api.js"></script>
+<script src="/js/admin.js"></script>
+</body>
+</html>
