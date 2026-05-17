@@ -12,6 +12,7 @@
   <h1>⏱ Timekeeper</h1>
   <div class="header-right">
     <span class="header-username" id="header-username"></span>
+    <button class="btn btn-light btn-sm" onclick="openModal('chpw-modal')">Change Password</button>
     <button class="btn btn-light btn-sm" onclick="logout()">Sign Out</button>
   </div>
 </header>
@@ -186,6 +187,35 @@
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('chore-modal')">Cancel</button>
       <button class="btn btn-primary" id="modal-submit-btn" onclick="submitChore()">Submit</button>
+    </div>
+  </div>
+</div>
+
+<!-- Change Password modal -->
+<div class="modal-overlay hidden" id="chpw-modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>Change Password</h3>
+      <button class="modal-close" onclick="closeModal('chpw-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Current Password</label>
+        <input type="password" id="chpw-current" class="input" placeholder="Current password">
+      </div>
+      <div class="form-group">
+        <label>New Password</label>
+        <input type="password" id="chpw-new" class="input" placeholder="New password (min 6 characters)">
+      </div>
+      <div class="form-group">
+        <label>Confirm New Password</label>
+        <input type="password" id="chpw-confirm" class="input" placeholder="Confirm new password">
+      </div>
+      <p id="chpw-msg" class="text-danger text-sm"></p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('chpw-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="changeMyPassword('chpw-modal')">Change Password</button>
     </div>
   </div>
 </div>

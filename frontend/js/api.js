@@ -123,6 +123,43 @@ document.addEventListener('click', (e) => {
   }
 });
 
+// ── Change password (works for both admin card and user modal) ─
+async function changeMyPassword(modalId) {
+  const current = document.getElementById('chpw-current').value;
+  const newPw   = document.getElementById('chpw-new').value;
+  const confirm = document.getElementById('chpw-confirm').value;
+  const msgEl   = document.getElementById('chpw-msg');
+  msgEl.textContent = '';
+  msgEl.className = 'text-sm';
+
+  if (!current || !newPw || !confirm) {
+    msgEl.textContent = 'All fields are required.';
+    msgEl.className = 'text-sm text-danger';
+    return;
+  }
+  if (newPw !== confirm) {
+    msgEl.textContent = 'New passwords do not match.';
+    msgEl.className = 'text-sm text-danger';
+    return;
+  }
+  if (newPw.length < 6) {
+    msgEl.textContent = 'New password must be at least 6 characters.';
+    msgEl.className = 'text-sm text-danger';
+    return;
+  }
+  try {
+    await API.post('/auth/change-password', { current_password: current, new_password: newPw });
+    showToast('Password changed successfully.', 'success');
+    document.getElementById('chpw-current').value = '';
+    document.getElementById('chpw-new').value     = '';
+    document.getElementById('chpw-confirm').value = '';
+    if (modalId) closeModal(modalId);
+  } catch (err) {
+    msgEl.textContent = err.message;
+    msgEl.className = 'text-sm text-danger';
+  }
+}
+
 // ── Set datetime-local input to now ───────────────────────────
 function nowLocalInput() {
   const now = new Date();
