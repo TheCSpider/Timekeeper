@@ -628,19 +628,23 @@ async function loadCompletions() {
       auto_approved:'<span class="badge badge-success">Approved</span>',
       rejected:     '<span class="badge badge-danger">Rejected</span>',
       adjustment:   '',
+      completed:    '<span class="badge badge-info">Completed</span>',
     }[s] ?? `<span class="badge badge-neutral">${esc(s)}</span>`);
 
     const rows = completions.map((c) => {
-      const isAdj = c.activity_type === 'adjustment';
-      const amt   = c.time_earned_minutes;
+      const isAdj  = c.activity_type === 'adjustment';
+      const isSess = c.activity_type === 'session';
+      const amt    = c.time_earned_minutes;
 
-      const typeCell = isAdj
-        ? '<span class="badge badge-info text-xs">Admin Adjustment</span>'
-        : c.chore_type === 'time_based'
-          ? `${Math.round(c.duration_minutes)}m logged`
-          : 'Doing';
+      const typeCell = isSess
+        ? '<span class="badge badge-neutral text-xs">Screen Time</span>'
+        : isAdj
+          ? '<span class="badge badge-info text-xs">Admin Adjustment</span>'
+          : c.chore_type === 'time_based'
+            ? `${Math.round(c.duration_minutes)}m logged`
+            : 'Doing';
 
-      const earnCell = isAdj
+      const earnCell = (isAdj || isSess)
         ? `<span class="${amt >= 0 ? 'text-success' : 'text-danger'} font-bold">${amt >= 0 ? '+' : '−'}${fmtMins(Math.abs(amt))}</span>`
         : amt > 0
           ? `<span class="text-success font-bold">+${fmtMins(amt)}</span>`

@@ -566,19 +566,23 @@ function renderActivity(rows) {
     auto_approved:'<span class="badge badge-success">Auto</span>',
     rejected:     '<span class="badge badge-danger">Rejected</span>',
     adjustment:   '',
+    completed:    '<span class="badge badge-info">Completed</span>',
   }[s] ?? `<span class="badge badge-neutral">${esc(s)}</span>`);
 
   const rowsHtml = sorted.map((r) => {
-    const isAdj = r.activity_type === 'adjustment';
-    const amt   = r.time_earned_minutes;
+    const isAdj  = r.activity_type === 'adjustment';
+    const isSess = r.activity_type === 'session';
+    const amt    = r.time_earned_minutes;
 
-    const typeCell = isAdj
-      ? '<span class="badge badge-info text-xs">Adjustment</span>'
-      : r.chore_type === 'time_based' ? 'Time-based' : 'Doing';
+    const typeCell = isSess
+      ? '<span class="badge badge-neutral text-xs">Screen Time</span>'
+      : isAdj
+        ? '<span class="badge badge-info text-xs">Adjustment</span>'
+        : r.chore_type === 'time_based' ? 'Time-based' : 'Doing';
 
-    const loggedCell = isAdj ? '—' : r.duration_minutes ? Math.round(r.duration_minutes) + 'm' : '—';
+    const loggedCell = (isAdj && !isSess) ? '—' : r.duration_minutes ? Math.round(r.duration_minutes) + 'm' : '—';
 
-    const earnCell = isAdj
+    const earnCell = (isAdj || isSess)
       ? `<span class="${amt >= 0 ? 'text-success' : 'text-danger'} font-bold">${amt >= 0 ? '+' : '−'}${fmtMins(Math.abs(amt))}</span>`
       : amt > 0
         ? `<span class="text-success font-bold">+${fmtMins(amt)}</span>`

@@ -508,6 +508,20 @@ router.get('/completions', async (req, res) => {
        FROM time_awards ta
        WHERE ta.user_id = $1
 
+       UNION ALL
+
+       SELECT
+         'session'::TEXT                            AS activity_type,
+         'Screen Time'::TEXT                        AS chore_name,
+         NULL::TEXT                                 AS chore_type,
+         ts.status::TEXT                            AS status,
+         -CEIL(ts.duration_minutes)::INTEGER        AS time_earned_minutes,
+         ts.duration_minutes                        AS duration_minutes,
+         NULL::TEXT                                 AS notes,
+         ts.end_time                                AS submitted_at
+       FROM time_sessions ts
+       WHERE ts.user_id = $1 AND ts.status = 'completed'
+
        ORDER BY submitted_at DESC
        LIMIT 50`,
       [req.user.id]
