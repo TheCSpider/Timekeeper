@@ -25,6 +25,7 @@ let state = {
 
 // ── Bootstrap ──────────────────────────────────────────────────
 async function init() {
+  await _serverTimeSyncReady; // ensure clock offset is resolved before first render
   document.getElementById('manual-start').value = nowLocalInput();
 
   await Promise.all([loadStatus(), loadChores(), loadCompletions()]);
@@ -105,7 +106,7 @@ function renderSession() {
 }
 
 function updateLiveTimer(startAt) {
-  const elapsed  = (Date.now() - startAt.getTime()) / 60000;
+  const elapsed  = (serverNow().getTime() - startAt.getTime()) / 60000;
   document.getElementById('session-timer').textContent = fmtMinsExact(elapsed);
 
   const remaining = state.balance - elapsed;

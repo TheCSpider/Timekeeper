@@ -4,10 +4,10 @@ const pool = require('../db');
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const { sendError } = require('../errors');
 const {
-  getWeekStart,
-  formatDate,
   getMandatoryChoresForWeek,
   getWeeklySettings,
+  getTimezone,
+  localWeekStart,
 } = require('../weekly');
 
 const router = express.Router();
@@ -155,11 +155,11 @@ router.post('/users/:id/unblock', async (req, res) => {
 // Weekly status overview for all non-admin users
 router.get('/weekly-status', async (req, res) => {
   try {
-    const weekStart = getWeekStart();
-    const weekStartStr = formatDate(weekStart);
-    const mandatoryIds = await getMandatoryChoresForWeek(weekStart);
+    const tz = await getTimezone();
+    const weekStartStr = localWeekStart(tz);
+    const mandatoryIds = await getMandatoryChoresForWeek(weekStartStr);
     const safeIds = mandatoryIds.length > 0 ? mandatoryIds : [-1];
-    const settings = await getWeeklySettings(weekStart);
+    const settings = await getWeeklySettings(weekStartStr);
     const required =
       settings.required_mandatory_count === 0
         ? mandatoryIds.length
@@ -205,8 +205,9 @@ router.get('/weekly-status', async (req, res) => {
 
 router.get('/chores', async (req, res) => {
   try {
-    const weekStart = getWeekStart();
-    const mandatoryIds = await getMandatoryChoresForWeek(weekStart);
+    const tz = await getTimezone();
+    const weekStartStr = localWeekStart(tz);
+    const mandatoryIds = await getMandatoryChoresForWeek(weekStartStr);
     const safeIds = mandatoryIds.length > 0 ? mandatoryIds : [-1];
 
     const result = await pool.query(
@@ -386,11 +387,11 @@ router.post('/chores/:id/toggle-mandatory', async (req, res) => {
   if (isNaN(choreId)) {
     return res.status(400).json({ error: 'Invalid chore ID.' });
   }
-  const weekStart = getWeekStart();
-  const weekStartStr = formatDate(weekStart);
+  const tz = await getTimezone();
+  const weekStartStr = localWeekStart(tz);
 
   try {
-    await getMandatoryChoresForWeek(weekStart); // ensure this week is initialised
+    await getMandatoryChoresForWeek(weekStartStr); // ensure this week is initialised
 
     const existing = await pool.query(
       'SELECT id FROM weekly_mandatory_chores WHERE week_start = $1 AND chore_id = $2',
@@ -533,6 +534,41 @@ router.put('/completions/:id', async (req, res) => {
   }
 });
 
+// ── App settings (timezone, etc.) ────────────────────────────────────────────
+
+router.get('/app-settings', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT key, value FROM app_settings');
+    const out = {};
+    result.rows.forEach((r) => { out[r.key] = r.value; });
+    res.json(out);
+  } catch (err) {
+    sendError(res, err, 'GET /app-settings');
+  }
+});
+
+router.post('/app-settings', async (req, res) => {
+  const { timezone } = req.body;
+  if (!timezone) {
+    return res.status(400).json({ error: 'timezone is required.' });
+  }
+  try {
+    Intl.DateTimeFormat(undefined, { timeZone: timezone });
+  } catch {
+    return res.status(400).json({ error: `"${timezone}" is not a valid IANA timezone.` });
+  }
+  try {
+    await pool.query(
+      `INSERT INTO app_settings (key, value) VALUES ('timezone', $1)
+       ON CONFLICT (key) DO UPDATE SET value = $1`,
+      [timezone]
+    );
+    res.json({ timezone });
+  } catch (err) {
+    sendError(res, err, 'POST /app-settings');
+  }
+});
+
 // ── Weekly settings ───────────────────────────────────────────────────────────
 
 router.get('/settings', async (req, res) => {
@@ -556,9 +592,10 @@ router.post('/settings', async (req, res) => {
 
   let effectiveDate = effective_week_start;
   if (!effectiveDate) {
-    const nextSunday = getWeekStart();
-    nextSunday.setUTCDate(nextSunday.getUTCDate() + 7);
-    effectiveDate = formatDate(nextSunday);
+    const tz = await getTimezone();
+    const thisWeek = new Date(localWeekStart(tz) + 'T12:00:00Z');
+    thisWeek.setUTCDate(thisWeek.getUTCDate() + 7);
+    effectiveDate = thisWeek.toISOString().slice(0, 10);
   }
 
   try {

@@ -1,10 +1,43 @@
 const pool = require('./db');
 const { userMessage } = require('./errors');
 
-// Returns the Sunday (UTC) that starts the week containing `date`
+// ── Timezone helpers ───────────────────────────────────────────────────────────
+
+// Returns the configured IANA timezone from app_settings (falls back to 'UTC')
+async function getTimezone() {
+  try {
+    const r = await pool.query("SELECT value FROM app_settings WHERE key = 'timezone'");
+    return r.rows.length > 0 ? r.rows[0].value : 'UTC';
+  } catch {
+    return 'UTC';
+  }
+}
+
+// Returns 'YYYY-MM-DD' for the current date in the given IANA timezone
+function localDateStr(tz, date = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(date);
+}
+
+// Returns 'YYYY-MM-DD' for the Sunday starting this week in the given IANA timezone
+function localWeekStart(tz, date = new Date()) {
+  const s = localDateStr(tz, date);
+  const [y, m, d] = s.split('-').map(Number);
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0 = Sun
+  return new Date(Date.UTC(y, m - 1, d - dow)).toISOString().slice(0, 10);
+}
+
+// Returns day-of-week (0=Sun … 6=Sat) for the current date in the given IANA timezone
+function localDayOfWeek(tz, date = new Date()) {
+  const s = localDateStr(tz, date);
+  const [y, m, d] = s.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+}
+
+// ── Legacy UTC helpers (kept for callers that still use them directly) ─────────
+
 function getWeekStart(date = new Date()) {
   const d = new Date(date);
-  const dayOfWeek = d.getUTCDay(); // 0 = Sunday
+  const dayOfWeek = d.getUTCDay();
   d.setUTCDate(d.getUTCDate() - dayOfWeek);
   d.setUTCHours(0, 0, 0, 0);
   return d;
@@ -20,23 +53,22 @@ function formatDate(date) {
   return date.toISOString().split('T')[0];
 }
 
-// Get the most-recently-effective weekly settings (for allowance & required count)
-async function getWeeklySettings(weekStart) {
+// ── Week settings ──────────────────────────────────────────────────────────────
+
+// weekStartStr: 'YYYY-MM-DD'
+async function getWeeklySettings(weekStartStr) {
   const result = await pool.query(
     `SELECT * FROM weekly_settings
      WHERE effective_week_start <= $1
      ORDER BY effective_week_start DESC
      LIMIT 1`,
-    [formatDate(weekStart)]
+    [weekStartStr]
   );
   return result.rows[0] || { required_mandatory_count: 0, allowance_minutes: 60 };
 }
 
-// Return chore IDs that are mandatory for the given week.
-// If none are recorded yet, inherit from the previous week and persist.
-async function getMandatoryChoresForWeek(weekStart) {
-  const weekStartStr = formatDate(weekStart);
-
+// weekStartStr: 'YYYY-MM-DD'
+async function getMandatoryChoresForWeek(weekStartStr) {
   const specific = await pool.query(
     'SELECT chore_id FROM weekly_mandatory_chores WHERE week_start = $1',
     [weekStartStr]
@@ -45,10 +77,14 @@ async function getMandatoryChoresForWeek(weekStart) {
     return specific.rows.map((r) => r.chore_id);
   }
 
-  // Inherit from previous week
+  // Inherit from previous week (subtract 7 days from the string date)
+  const prevDate = new Date(weekStartStr + 'T12:00:00Z');
+  prevDate.setUTCDate(prevDate.getUTCDate() - 7);
+  const prevWeekStartStr = prevDate.toISOString().slice(0, 10);
+
   const prev = await pool.query(
     'SELECT chore_id FROM weekly_mandatory_chores WHERE week_start = $1',
-    [formatDate(getPrevWeekStart(weekStart))]
+    [prevWeekStartStr]
   );
   if (prev.rows.length > 0) {
     const ids = prev.rows.map((r) => r.chore_id);
@@ -64,23 +100,21 @@ async function getMandatoryChoresForWeek(weekStart) {
   return [];
 }
 
-// Run all weekly housekeeping for a user:
-//   1. Pay Sunday allowance if due and not yet paid.
-//   2. Evaluate previous week's mandatory chores and set spending_blocked for current week.
-// Returns { spendingBlocked: bool }
-async function processWeeklyUpdates(userId) {
-  const now = new Date();
-  const currentWeekStart = getWeekStart(now);
-  const currentWeekStartStr = formatDate(currentWeekStart);
+// ── Weekly housekeeping ────────────────────────────────────────────────────────
 
-  // ── 1. Sunday allowance ──────────────────────────────────────────────────
-  if (now.getUTCDay() === 0) {
+async function processWeeklyUpdates(userId) {
+  const tz = await getTimezone();
+  const now = new Date();
+  const currentWeekStartStr = localWeekStart(tz, now);
+
+  // ── 1. Sunday allowance ──────────────────────────────────────────────────────
+  if (localDayOfWeek(tz, now) === 0) {
     const alreadyPaid = await pool.query(
       'SELECT id FROM weekly_allowances WHERE user_id = $1 AND week_start = $2',
       [userId, currentWeekStartStr]
     );
     if (alreadyPaid.rows.length === 0) {
-      const settings = await getWeeklySettings(currentWeekStart);
+      const settings = await getWeeklySettings(currentWeekStartStr);
       const amount = settings.allowance_minutes;
       const client = await pool.connect();
       try {
@@ -104,7 +138,7 @@ async function processWeeklyUpdates(userId) {
     }
   }
 
-  // ── 2. Evaluate previous week, set current-week spending block ────────────
+  // ── 2. Evaluate previous week, set current-week spending block ────────────────
   const existing = await pool.query(
     'SELECT spending_blocked, admin_override FROM weekly_user_status WHERE user_id = $1 AND week_start = $2',
     [userId, currentWeekStartStr]
@@ -115,10 +149,12 @@ async function processWeeklyUpdates(userId) {
   }
 
   // Not yet evaluated — check previous week
-  const prevWeekStart = getPrevWeekStart(now);
-  const prevWeekStartStr = formatDate(prevWeekStart);
-  const mandatoryIds = await getMandatoryChoresForWeek(prevWeekStart);
-  const settings = await getWeeklySettings(prevWeekStart);
+  const prevDate = new Date(currentWeekStartStr + 'T12:00:00Z');
+  prevDate.setUTCDate(prevDate.getUTCDate() - 7);
+  const prevWeekStartStr = prevDate.toISOString().slice(0, 10);
+
+  const mandatoryIds = await getMandatoryChoresForWeek(prevWeekStartStr);
+  const settings = await getWeeklySettings(prevWeekStartStr);
   const required =
     settings.required_mandatory_count === 0
       ? mandatoryIds.length
@@ -159,4 +195,8 @@ module.exports = {
   getWeeklySettings,
   getMandatoryChoresForWeek,
   processWeeklyUpdates,
+  getTimezone,
+  localDateStr,
+  localWeekStart,
+  localDayOfWeek,
 };

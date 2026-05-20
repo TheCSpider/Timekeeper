@@ -622,15 +622,39 @@ function renderActivity(rows) {
 // ── Settings ───────────────────────────────────────────────────
 async function loadSettings() {
   try {
-    const settings = await API.get('/admin/settings');
-    renderSettingsHistory(settings);
-    if (settings.length > 0) {
-      const latest = settings[0];
+    const [history, appSettings] = await Promise.all([
+      API.get('/admin/settings'),
+      API.get('/admin/app-settings'),
+    ]);
+    renderSettingsHistory(history);
+    if (history.length > 0) {
+      const latest = history[0];
       document.getElementById('setting-allowance').value = latest.allowance_minutes;
       document.getElementById('setting-required').value  = latest.required_mandatory_count;
     }
+    document.getElementById('setting-timezone').value = appSettings.timezone || 'UTC';
   } catch (err) {
     showToast('Failed to load settings: ' + err.message, 'error');
+  }
+}
+
+async function saveTimezone() {
+  const tz    = document.getElementById('setting-timezone').value.trim();
+  const msgEl = document.getElementById('timezone-msg');
+  msgEl.textContent = '';
+  msgEl.className = 'text-sm';
+  if (!tz) {
+    msgEl.textContent = 'Enter a timezone.';
+    msgEl.className = 'text-sm text-danger';
+    return;
+  }
+  try {
+    await API.post('/admin/app-settings', { timezone: tz });
+    msgEl.textContent = `Timezone set to "${tz}".`;
+    msgEl.className = 'text-sm text-success';
+  } catch (err) {
+    msgEl.textContent = err.message;
+    msgEl.className = 'text-sm text-danger';
   }
 }
 

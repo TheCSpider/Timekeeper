@@ -223,6 +223,38 @@
       </div>
     </div>
 
+    <!-- Timezone (full width) -->
+    <div class="card">
+      <div class="card-header"><h2>Timezone</h2></div>
+      <div style="display:flex;flex-direction:column;gap:.75rem;max-width:480px;">
+        <div class="form-group">
+          <label>IANA Timezone</label>
+          <input type="text" id="setting-timezone" class="input" list="timezone-list"
+                 placeholder="e.g. America/New_York">
+          <datalist id="timezone-list">
+            <option value="UTC">
+            <option value="America/New_York">
+            <option value="America/Chicago">
+            <option value="America/Denver">
+            <option value="America/Phoenix">
+            <option value="America/Los_Angeles">
+            <option value="America/Anchorage">
+            <option value="Pacific/Honolulu">
+            <option value="Europe/London">
+            <option value="Europe/Paris">
+            <option value="Europe/Berlin">
+            <option value="Asia/Kolkata">
+            <option value="Asia/Tokyo">
+            <option value="Asia/Singapore">
+            <option value="Australia/Sydney">
+          </datalist>
+          <p class="text-xs text-muted mt-1">Controls when daily and weekly chore resets occur. Must be a valid IANA timezone name.</p>
+        </div>
+        <button class="btn btn-primary" style="align-self:flex-start;" onclick="saveTimezone()">Save Timezone</button>
+        <p id="timezone-msg" class="text-sm"></p>
+      </div>
+    </div>
+
     <!-- Settings History (full width) -->
     <div class="card">
       <div class="card-header"><h2>Settings History</h2></div>

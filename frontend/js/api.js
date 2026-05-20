@@ -160,9 +160,24 @@ async function changeMyPassword(modalId) {
   }
 }
 
-// ── Set datetime-local input to now ───────────────────────────
+// ── Server clock sync ─────────────────────────────────────────
+// Fetches server time once on load and stores the offset so that
+// all time-sensitive UI uses server time even if the local clock is wrong.
+let _clockOffsetMs = 0;
+const _serverTimeSyncReady = (async () => {
+  try {
+    const data = await API.get('/auth/server-time');
+    _clockOffsetMs = new Date(data.now).getTime() - Date.now();
+  } catch { /* silent — fall back to local clock */ }
+})();
+
+function serverNow() {
+  return new Date(Date.now() + _clockOffsetMs);
+}
+
+// ── Set datetime-local input to now (server-adjusted) ─────────
 function nowLocalInput() {
-  const now = new Date();
+  const now = serverNow();
   now.setSeconds(0, 0);
   return now.toISOString().slice(0, 16);
 }

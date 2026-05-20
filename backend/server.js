@@ -158,6 +158,13 @@ async function runMigrations() {
     )
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key   VARCHAR(100) PRIMARY KEY,
+      value TEXT NOT NULL
+    )
+  `);
+
   // ── Indexes ────────────────────────────────────────────────────────────────
 
   await pool.query(`
@@ -228,6 +235,12 @@ async function seedDefaults() {
     );
     console.log('✅ Default weekly settings → allowance: 60 min, required mandatory chores: all');
   }
+
+  // Default timezone
+  await pool.query(`
+    INSERT INTO app_settings (key, value) VALUES ('timezone', 'UTC')
+    ON CONFLICT DO NOTHING
+  `);
 
   // Default chores
   const chores = await pool.query('SELECT id FROM chores LIMIT 1');

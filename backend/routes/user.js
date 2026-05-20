@@ -3,11 +3,12 @@ const pool = require('../db');
 const { authenticate } = require('../middleware/auth');
 const { sendError } = require('../errors');
 const {
-  getWeekStart,
-  formatDate,
   getMandatoryChoresForWeek,
   getWeeklySettings,
   processWeeklyUpdates,
+  getTimezone,
+  localWeekStart,
+  localDayOfWeek,
 } = require('../weekly');
 
 const router = express.Router();
@@ -17,11 +18,8 @@ router.use(authenticate);
 
 // Check whether a user can submit a chore right now, and how much they'd earn.
 // Returns { allowed, reason, timeEarned, atCap }
-async function checkChoreEligibility(userId, chore, isMandatory, durationMinutes) {
-  const now = new Date();
-  const weekStart = getWeekStart(now);
-  const weekStartStr = formatDate(weekStart);
-  const todayStr = formatDate(now);
+async function checkChoreEligibility(userId, chore, isMandatory, durationMinutes, tz) {
+  const weekStartStr = localWeekStart(tz);
 
   // ── Repeat constraint ──────────────────────────────────────────────────────
   if (chore.repeat_type === 'once') {
@@ -38,26 +36,26 @@ async function checkChoreEligibility(userId, chore, isMandatory, durationMinutes
     const existing = await pool.query(
       `SELECT id FROM chore_completions
        WHERE user_id = $1 AND chore_id = $2
-         AND submitted_at >= $3::date
-         AND submitted_at < ($3::date + INTERVAL '1 day')
+         AND submitted_at AT TIME ZONE $3 >= DATE_TRUNC('day', NOW() AT TIME ZONE $3)
+         AND submitted_at AT TIME ZONE $3 < DATE_TRUNC('day', NOW() AT TIME ZONE $3) + INTERVAL '1 day'
          AND status != 'rejected'`,
-      [userId, chore.id, todayStr]
+      [userId, chore.id, tz]
     );
     if (existing.rows.length > 0) {
       return { allowed: false, reason: 'Already completed today.' };
     }
   } else if (chore.repeat_type === 'weekdays') {
-    const dayOfWeek = now.getUTCDay(); // 0 = Sun, 6 = Sat
-    if (dayOfWeek === 0 || dayOfWeek === 6) {
+    const dow = localDayOfWeek(tz);
+    if (dow === 0 || dow === 6) {
       return { allowed: false, reason: 'This chore is only available on weekdays (Mon–Fri).' };
     }
     const existing = await pool.query(
       `SELECT id FROM chore_completions
        WHERE user_id = $1 AND chore_id = $2
-         AND submitted_at >= $3::date
-         AND submitted_at < ($3::date + INTERVAL '1 day')
+         AND submitted_at AT TIME ZONE $3 >= DATE_TRUNC('day', NOW() AT TIME ZONE $3)
+         AND submitted_at AT TIME ZONE $3 < DATE_TRUNC('day', NOW() AT TIME ZONE $3) + INTERVAL '1 day'
          AND status != 'rejected'`,
-      [userId, chore.id, todayStr]
+      [userId, chore.id, tz]
     );
     if (existing.rows.length > 0) {
       return { allowed: false, reason: 'Already completed today.' };
@@ -85,10 +83,10 @@ async function checkChoreEligibility(userId, chore, isMandatory, durationMinutes
         `SELECT COALESCE(SUM(time_earned_minutes), 0) AS total
          FROM chore_completions
          WHERE user_id = $1 AND chore_id = $2
-           AND submitted_at >= $3::date
-           AND submitted_at < ($3::date + INTERVAL '1 day')
+           AND submitted_at AT TIME ZONE $3 >= DATE_TRUNC('day', NOW() AT TIME ZONE $3)
+           AND submitted_at AT TIME ZONE $3 < DATE_TRUNC('day', NOW() AT TIME ZONE $3) + INTERVAL '1 day'
            AND status IN ('approved', 'auto_approved')`,
-        [userId, chore.id, todayStr]
+        [userId, chore.id, tz]
       );
       earnedSoFar = parseInt(r.rows[0].total, 10);
     } else {
@@ -131,10 +129,10 @@ router.get('/status', async (req, res) => {
       [req.user.id]
     );
 
-    const weekStart = getWeekStart();
-    const weekStartStr = formatDate(weekStart);
-    const mandatoryIds = await getMandatoryChoresForWeek(weekStart);
-    const settings = await getWeeklySettings(weekStart);
+    const tz = await getTimezone();
+    const weekStartStr = localWeekStart(tz);
+    const mandatoryIds = await getMandatoryChoresForWeek(weekStartStr);
+    const settings = await getWeeklySettings(weekStartStr);
     const required =
       settings.required_mandatory_count === 0
         ? mandatoryIds.length
@@ -219,7 +217,7 @@ router.post('/session/stop', async (req, res) => {
     const durationMs = endTime - new Date(session.start_time);
     const durationMinutes = durationMs / 60000;
     // Full deduction — balance can go negative (time debt)
-    const deduction = Math.ceil(durationMinutes);
+    const deduction = Math.floor(durationMinutes);
 
     const userRow = await pool.query(
       'SELECT time_balance_minutes FROM users WHERE id = $1',
@@ -279,11 +277,10 @@ router.post('/session/cancel', async (req, res) => {
 // ── Chores list ───────────────────────────────────────────────────────────────
 router.get('/chores', async (req, res) => {
   try {
-    const now = new Date();
-    const weekStart = getWeekStart(now);
-    const weekStartStr = formatDate(weekStart);
-    const todayStr = formatDate(now);
-    const mandatoryIds = await getMandatoryChoresForWeek(weekStart);
+    const tz = await getTimezone();
+    const weekStartStr = localWeekStart(tz);
+    const dow = localDayOfWeek(tz);
+    const mandatoryIds = await getMandatoryChoresForWeek(weekStartStr);
     const safeIds = mandatoryIds.length > 0 ? mandatoryIds : [-1];
 
     // All completions this week (for repeat checking and status display)
@@ -294,14 +291,14 @@ router.get('/chores', async (req, res) => {
       [req.user.id, weekStartStr]
     );
 
-    // Today's completions (for daily repeat checking)
+    // Today's completions in the configured timezone (for daily repeat checking)
     const todayCompletions = await pool.query(
       `SELECT chore_id, status, time_earned_minutes
        FROM chore_completions
        WHERE user_id = $1
-         AND submitted_at >= $2::date
-         AND submitted_at < ($2::date + INTERVAL '1 day')`,
-      [req.user.id, todayStr]
+         AND submitted_at AT TIME ZONE $2 >= DATE_TRUNC('day', NOW() AT TIME ZONE $2)
+         AND submitted_at AT TIME ZONE $2 < DATE_TRUNC('day', NOW() AT TIME ZONE $2) + INTERVAL '1 day'`,
+      [req.user.id, tz]
     );
 
     // Earned per chore this week (approved) — for cap tracking
@@ -315,16 +312,16 @@ router.get('/chores', async (req, res) => {
     const weekEarnedMap = {};
     weekEarned.rows.forEach((r) => { weekEarnedMap[r.chore_id] = parseInt(r.total, 10); });
 
-    // Earned per chore today (approved) — for daily cap tracking
+    // Earned per chore today in the configured timezone — for daily cap tracking
     const todayEarned = await pool.query(
       `SELECT chore_id, COALESCE(SUM(time_earned_minutes), 0) AS total
        FROM chore_completions
        WHERE user_id = $1
-         AND submitted_at >= $2::date
-         AND submitted_at < ($2::date + INTERVAL '1 day')
+         AND submitted_at AT TIME ZONE $2 >= DATE_TRUNC('day', NOW() AT TIME ZONE $2)
+         AND submitted_at AT TIME ZONE $2 < DATE_TRUNC('day', NOW() AT TIME ZONE $2) + INTERVAL '1 day'
          AND status IN ('approved', 'auto_approved')
        GROUP BY chore_id`,
-      [req.user.id, todayStr]
+      [req.user.id, tz]
     );
     const todayEarnedMap = {};
     todayEarned.rows.forEach((r) => { todayEarnedMap[r.chore_id] = parseInt(r.total, 10); });
@@ -366,8 +363,7 @@ router.get('/chores', async (req, res) => {
           submitBlockReason = 'Completed today';
         }
       } else if (c.repeat_type === 'weekdays') {
-        const dayOfWeek = now.getUTCDay();
-        if (dayOfWeek === 0 || dayOfWeek === 6) {
+        if (dow === 0 || dow === 6) {
           canSubmit = false;
           submitBlockReason = 'Weekdays only (Mon–Fri)';
         } else if (todayCompSet.has(c.id)) {
@@ -427,14 +423,14 @@ router.post('/chores/:id/complete', async (req, res) => {
       return res.status(400).json({ error: 'Duration (in minutes) required for time-based chores.' });
     }
 
-    const weekStart = getWeekStart();
-    const weekStartStr = formatDate(weekStart);
-    const mandatoryIds = await getMandatoryChoresForWeek(weekStart);
+    const tz = await getTimezone();
+    const weekStartStr = localWeekStart(tz);
+    const mandatoryIds = await getMandatoryChoresForWeek(weekStartStr);
     const isMandatory = mandatoryIds.includes(choreId);
 
     // Check eligibility (handles repeat + cap)
     const eligibility = await checkChoreEligibility(
-      req.user.id, chore, isMandatory, duration_minutes
+      req.user.id, chore, isMandatory, duration_minutes, tz
     );
 
     if (!eligibility.allowed) {

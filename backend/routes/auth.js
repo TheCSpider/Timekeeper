@@ -46,6 +46,10 @@ router.get('/me', authenticate, async (req, res) => {
   }
 });
 
+router.get('/server-time', (_req, res) => {
+  res.json({ now: new Date().toISOString() });
+});
+
 router.post('/change-password', authenticate, async (req, res) => {
   const { current_password, new_password } = req.body;
   if (!current_password || !new_password) {
