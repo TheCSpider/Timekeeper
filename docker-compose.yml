@@ -28,6 +28,15 @@ services:
       DATABASE_URL: postgresql://timekeeper:${POSTGRES_PASSWORD:-timekeeper_pass}@db:5432/timekeeper
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET env var is required}
       PORT: 3000
+      # ── Email reports (optional) ───────────────────────────────────────────
+      # Set these to enable weekly/monthly email reports sent to the admin.
+      # The recipient address is configured in Admin → Settings → Report Email.
+      # SMTP_HOST: smtp.gmail.com
+      # SMTP_PORT: 587
+      # SMTP_SECURE: "false"   # set "true" for port 465 (SSL)
+      # SMTP_USER: you@gmail.com
+      # SMTP_PASS: your-app-password
+      # SMTP_FROM: "Timekeeper <you@gmail.com>"
     depends_on:
       db:
         condition: service_healthy

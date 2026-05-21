@@ -255,6 +255,25 @@
       </div>
     </div>
 
+    <!-- Email Reports (full width) -->
+    <div class="card">
+      <div class="card-header"><h2>Email Reports</h2></div>
+      <div style="display:flex;flex-direction:column;gap:.75rem;max-width:480px;">
+        <div class="form-group">
+          <label>Report Recipient Email</label>
+          <input type="email" id="setting-report-email" class="input" placeholder="admin@example.com">
+          <p class="text-xs text-muted mt-1">Weekly and monthly summaries are sent here. Leave blank to disable reports.</p>
+        </div>
+        <button class="btn btn-primary" style="align-self:flex-start;" onclick="saveReportEmail()">Save Email</button>
+        <p id="report-email-msg" class="text-sm"></p>
+        <div style="background:var(--bg-secondary,#f4f6f8);border-radius:var(--radius-sm);padding:.75rem 1rem;font-size:.8125rem;color:var(--text-muted,#6b7280);line-height:1.5;">
+          <strong>SMTP setup required</strong> — configure <code>SMTP_HOST</code>, <code>SMTP_USER</code>, and <code>SMTP_PASS</code>
+          environment variables in your <code>docker-compose.yml</code> (or <code>.env</code>) to enable delivery.
+          Reports send on <strong>Sunday midnight</strong> (weekly) and the <strong>1st of each month</strong> (monthly).
+        </div>
+      </div>
+    </div>
+
     <!-- Settings History (full width) -->
     <div class="card">
       <div class="card-header"><h2>Settings History</h2></div>

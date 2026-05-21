@@ -632,7 +632,8 @@ async function loadSettings() {
       document.getElementById('setting-allowance').value = latest.allowance_minutes;
       document.getElementById('setting-required').value  = latest.required_mandatory_count;
     }
-    document.getElementById('setting-timezone').value = appSettings.timezone || 'UTC';
+    document.getElementById('setting-timezone').value    = appSettings.timezone     || 'UTC';
+    document.getElementById('setting-report-email').value = appSettings.report_email || '';
   } catch (err) {
     showToast('Failed to load settings: ' + err.message, 'error');
   }
@@ -651,6 +652,21 @@ async function saveTimezone() {
   try {
     await API.post('/admin/app-settings', { timezone: tz });
     msgEl.textContent = `Timezone set to "${tz}".`;
+    msgEl.className = 'text-sm text-success';
+  } catch (err) {
+    msgEl.textContent = err.message;
+    msgEl.className = 'text-sm text-danger';
+  }
+}
+
+async function saveReportEmail() {
+  const email = document.getElementById('setting-report-email').value.trim();
+  const msgEl = document.getElementById('report-email-msg');
+  msgEl.textContent = '';
+  msgEl.className = 'text-sm';
+  try {
+    await API.post('/admin/app-settings', { report_email: email });
+    msgEl.textContent = email ? `Report email set to "${email}".` : 'Report email cleared — reports will not be sent.';
     msgEl.className = 'text-sm text-success';
   } catch (err) {
     msgEl.textContent = err.message;

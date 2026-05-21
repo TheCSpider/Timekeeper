@@ -6,6 +6,7 @@ const pool = require('./db');
 const authRoutes  = require('./routes/auth');
 const userRoutes  = require('./routes/user');
 const adminRoutes = require('./routes/admin');
+const { initScheduler } = require('./scheduler');
 
 const app = express();
 
@@ -281,6 +282,7 @@ app.listen(PORT, async () => {
     await waitForDb();
     await runMigrations();
     await seedDefaults();
+    await initScheduler();
     console.log(`\n🚀 Ready at http://localhost:${PORT}\n`);
   } catch (err) {
     console.error('Startup error:', err.message);

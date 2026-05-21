@@ -548,22 +548,36 @@ router.get('/app-settings', async (req, res) => {
 });
 
 router.post('/app-settings', async (req, res) => {
-  const { timezone } = req.body;
-  if (!timezone) {
-    return res.status(400).json({ error: 'timezone is required.' });
+  const { timezone, report_email } = req.body;
+  if (timezone === undefined && report_email === undefined) {
+    return res.status(400).json({ error: 'Provide at least one of: timezone, report_email.' });
   }
-  try {
-    Intl.DateTimeFormat(undefined, { timeZone: timezone });
-  } catch {
-    return res.status(400).json({ error: `"${timezone}" is not a valid IANA timezone.` });
+
+  if (timezone !== undefined) {
+    try {
+      Intl.DateTimeFormat(undefined, { timeZone: timezone });
+    } catch {
+      return res.status(400).json({ error: `"${timezone}" is not a valid IANA timezone.` });
+    }
   }
+
   try {
-    await pool.query(
-      `INSERT INTO app_settings (key, value) VALUES ('timezone', $1)
-       ON CONFLICT (key) DO UPDATE SET value = $1`,
-      [timezone]
-    );
-    res.json({ timezone });
+    const updates = [];
+    if (timezone !== undefined) updates.push({ key: 'timezone', value: timezone });
+    if (report_email !== undefined) updates.push({ key: 'report_email', value: report_email });
+
+    for (const { key, value } of updates) {
+      if (value === '') {
+        await pool.query('DELETE FROM app_settings WHERE key = $1', [key]);
+      } else {
+        await pool.query(
+          `INSERT INTO app_settings (key, value) VALUES ($1, $2)
+           ON CONFLICT (key) DO UPDATE SET value = $2`,
+          [key, value]
+        );
+      }
+    }
+    res.json({ timezone, report_email });
   } catch (err) {
     sendError(res, err, 'POST /app-settings');
   }
