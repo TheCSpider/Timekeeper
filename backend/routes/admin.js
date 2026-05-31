@@ -135,9 +135,9 @@ router.post('/users/:id/deduct', async (req, res) => {
 
 // Override spending block for a user for the current week
 router.post('/users/:id/unblock', async (req, res) => {
-  const weekStart = getWeekStart();
-  const weekStartStr = formatDate(weekStart);
   try {
+    const tz = await getTimezone();
+    const weekStartStr = localWeekStart(tz);
     await pool.query(
       `INSERT INTO weekly_user_status
          (user_id, week_start, mandatory_chores_met, spending_blocked, admin_override, evaluated_at)
